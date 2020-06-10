@@ -294,29 +294,33 @@ namespace Roslyn.Insertion
 
                 if (!useExistingPr || Options.OverwritePr)
                 {
-                    try
+                    var nl = Environment.NewLine;
+                    if (oldBuild is null)
                     {
-                        var nl = Environment.NewLine;
-                        if (oldBuild is null)
-                        {
-                            prDescriptionMarkdown += $"{nl}---{nl}Unable to find details for previous build ({oldComponentVersion}){nl}";
-                        }
-                        else
-                        {
-                            var (changes, diffLink) = await GetChangesBetweenBuildsAsync(oldBuild, buildToInsert, cancellationToken);
+                        prDescriptionMarkdown += $"{nl}---{nl}Unable to find details for previous build ({oldComponentVersion}){nl}";
+                    }
+                    else
+                    {
+                        var repoId = buildToInsert.Repository.Id; // e.g. dotnet/roslyn
+                        var fromSHA = oldBuild.SourceVersion.Substring(0, 7);
+                        var toSHA = buildToInsert.SourceVersion.Substring(0, 7);
+                        var diffLink = $"https://github.com/{repoId}/compare/{fromSHA}...{toSHA}?w=1";
 
-                            var diffDescription = changes.Any()
-                                ? $"[View Complete Diff of Changes]({diffLink})"
-                                : "No source changes since previous insertion";
+                        var diffDescription = oldBuild.SourceVersion != buildToInsert.SourceVersion
+                            ? $"[View Complete Diff of Changes]({diffLink})"
+                            : "No source changes since previous insertion";
 
-                            prDescriptionMarkdown += nl + "---" + nl + diffDescription + nl;
+                        prDescriptionMarkdown += nl + "---" + nl + diffDescription + nl;
+                        try
+                        {
+                            var changes = await GetChangesBetweenBuildsAsync(buildToInsert, fromSHA, toSHA, cancellationToken);
                             prDescriptionMarkdown = AppendChangesToDescription(prDescriptionMarkdown, oldBuild ?? buildToInsert, changes);
                         }
-                    }
-                    catch (Exception e)
-                    {
-                        LogWarning("Failed to create diff links.");
-                        LogWarning(e.Message);
+                        catch (Exception e)
+                        {
+                            LogWarning("Failed to create diff links.");
+                            LogWarning(e.Message);
+                        }
                     }
                 }
 

@@ -501,21 +501,18 @@ namespace Roslyn.Insertion
             throw new Exception($"Build {newestBuild.BuildNumber} did not upload its contents to VSTS Drop and is invalid.");
         }
 
-        internal static async Task<(List<GitCommit> changes, string diffLink)> GetChangesBetweenBuildsAsync(Build fromBuild, Build tobuild, CancellationToken cancellationToken)
+        internal static async Task<List<GitCommit>> GetChangesBetweenBuildsAsync(Build toInsert, string fromSHA, string toSHA, CancellationToken cancellationToken)
         {
-            if (tobuild.Repository.Type == "GitHub")
+            if (toInsert.Repository.Type == "GitHub")
             {
-                var repoId = tobuild.Repository.Id; // e.g. dotnet/roslyn
-
-                var fromSHA = fromBuild.SourceVersion.Substring(0, 7);
-                var toSHA = tobuild.SourceVersion.Substring(0, 7);
+                var repoId = toInsert.Repository.Id; // e.g. dotnet/roslyn
 
                 var restEndpoint = $"https://api.github.com/repos/{repoId}/compare/{fromSHA}...{toSHA}";
                 var client = new HttpClient();
                 var request = new HttpRequestMessage(HttpMethod.Get, restEndpoint);
                 request.Headers.Add("User-Agent", "RoslynInsertionTool");
 
-                var response = await client.SendAsync(request);
+                var response = await client.SendAsync(request, cancellationToken);
                 var content = await response.Content.ReadAsStringAsync();
 
                 // https://developer.github.com/v3/repos/commits/
@@ -560,7 +557,7 @@ namespace Roslyn.Insertion
                     .Reverse()
                     .ToList();
 
-                return (result, $"https://github.com/{repoId}/compare/{fromSHA}...{toSHA}?w=1");
+                return result;
             }
 
             throw new NotSupportedException("Only builds created from GitHub repos support enumerating commits.");
